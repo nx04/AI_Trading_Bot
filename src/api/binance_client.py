@@ -427,6 +427,124 @@ class BinanceClient:
     
     # ==================== 工具方法 ====================
     
+    def get_exchange_info(self) -> Optional[Dict[str, Any]]:
+        """
+        获取交易所信息（包含交易对精度）
+        
+        Returns:
+            交易所信息字典
+        """
+        try:
+            info = self.client.futures_exchange_info()
+            return info
+        except BinanceAPIException as e:
+            print(f"⚠️ 获取交易所信息失败: {e}")
+            return None
+    
+    def get_symbol_info(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        获取指定交易对的信息（包含精度）
+        
+        Args:
+            symbol: 交易对，如 'BTCUSDT'
+            
+        Returns:
+            交易对信息字典，包含 stepSize（数量精度）和 tickSize（价格精度）
+        """
+        try:
+            info = self.get_exchange_info()
+            if not info:
+                return None
+            
+            for s in info.get('symbols', []):
+                if s['symbol'] == symbol:
+                    # 提取数量精度（stepSize）
+                    quantity_precision = None
+                    price_precision = None
+                    step_size = None
+                    tick_size = None
+                    
+                    for f in s.get('filters', []):
+                        if f['filterType'] == 'LOT_SIZE':
+                            step_size = float(f['stepSize'])
+                            # 计算小数位数
+                            if step_size >= 1:
+                                quantity_precision = 0
+                            else:
+                                # 计算stepSize的小数位数
+                                step_str = str(step_size).rstrip('0')
+                                if '.' in step_str:
+                                    quantity_precision = len(step_str.split('.')[-1])
+                                else:
+                                    quantity_precision = 0
+                        elif f['filterType'] == 'PRICE_FILTER':
+                            tick_size = float(f['tickSize'])
+                            if tick_size >= 1:
+                                price_precision = 0
+                            else:
+                                # 计算tickSize的小数位数
+                                tick_str = str(tick_size).rstrip('0')
+                                if '.' in tick_str:
+                                    price_precision = len(tick_str.split('.')[-1])
+                                else:
+                                    price_precision = 0
+                    
+                    return {
+                        'symbol': symbol,
+                        'quantity_precision': quantity_precision,
+                        'price_precision': price_precision,
+                        'step_size': step_size,
+                        'tick_size': tick_size,
+                        'raw': s
+                    }
+            
+            return None
+        except Exception as e:
+            print(f"⚠️ 获取交易对信息失败 {symbol}: {e}")
+            return None
+    
+    def format_quantity(self, symbol: str, quantity: float) -> float:
+        """
+        格式化数量到正确的精度
+        
+        Args:
+            symbol: 交易对
+            quantity: 原始数量
+            
+        Returns:
+            格式化后的数量
+        """
+        try:
+            symbol_info = self.get_symbol_info(symbol)
+            if not symbol_info:
+                # 如果获取失败，使用默认精度（3位小数）
+                return round(quantity, 3)
+            
+            step_size = symbol_info.get('step_size')
+            if step_size and step_size > 0:
+                # 向下取整到 stepSize 的倍数
+                quantity = float(int(quantity / step_size) * step_size)
+            
+            precision = symbol_info.get('quantity_precision')
+            if precision is not None:
+                # 使用指定精度四舍五入
+                formatted = round(quantity, precision)
+                # 确保不会因为精度问题导致数量为0
+                if formatted <= 0 and quantity > 0:
+                    # 如果格式化后为0但原数量>0，使用最小步长
+                    if step_size and step_size > 0:
+                        formatted = step_size
+                    else:
+                        formatted = round(quantity, 3)
+                return formatted
+            else:
+                # 默认保留3位小数
+                return round(quantity, 3)
+        except Exception as e:
+            print(f"⚠️ 格式化数量失败 {symbol}: {e}")
+            # 失败时返回保留3位小数的值
+            return round(quantity, 3)
+    
     def get_server_time(self) -> Dict[str, Any]:
         """获取服务器时间"""
         try:

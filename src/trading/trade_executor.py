@@ -50,6 +50,18 @@ class TradeExecutor:
             except Exception as e:
                 print(f"⚠️ 调整杠杆失败（继续开仓）: {e}")
         
+        # 调整数量精度
+        original_quantity = quantity
+        quantity = self.client.format_quantity(symbol, quantity)
+        
+        # 检查格式化后的数量是否有效
+        if quantity <= 0:
+            print(f"❌ {symbol} 格式化后数量无效: {original_quantity} -> {quantity}")
+            raise ValueError(f"格式化后数量无效: {quantity}")
+        
+        if original_quantity != quantity:
+            print(f"📏 {symbol} 数量精度调整: {original_quantity} -> {quantity}")
+        
         # 开仓
         try:
             order = self.client.create_market_order(
@@ -93,6 +105,18 @@ class TradeExecutor:
             except Exception as e:
                 print(f"⚠️ 调整杠杆失败（继续开仓）: {e}")
         
+        # 调整数量精度
+        original_quantity = quantity
+        quantity = self.client.format_quantity(symbol, quantity)
+        
+        # 检查格式化后的数量是否有效
+        if quantity <= 0:
+            print(f"❌ {symbol} 格式化后数量无效: {original_quantity} -> {quantity}")
+            raise ValueError(f"格式化后数量无效: {quantity}")
+        
+        if original_quantity != quantity:
+            print(f"📏 {symbol} 数量精度调整: {original_quantity} -> {quantity}")
+        
         # 开仓
         try:
             order = self.client.create_market_order(
@@ -135,6 +159,15 @@ class TradeExecutor:
             amount = abs(float(position['positionAmt']))
             side = 'SELL' if position['positionAmt'][0] != '-' else 'BUY'
             
+            # 调整数量精度
+            original_amount = amount
+            amount = self.client.format_quantity(symbol, amount)
+            
+            # 检查格式化后的数量是否有效
+            if amount <= 0:
+                print(f"❌ {symbol} 平仓数量格式化后无效: {original_amount} -> {amount}")
+                raise ValueError(f"平仓数量无效: {amount}")
+            
             # 撤销所有挂单
             try:
                 self.client.cancel_all_orders(symbol)
@@ -174,6 +207,9 @@ class TradeExecutor:
             
             total_amount = abs(float(position['positionAmt']))
             close_amount = total_amount * percentage
+            
+            # 调整数量精度
+            close_amount = self.client.format_quantity(symbol, close_amount)
             
             # 确定平仓方向
             side = 'SELL' if position['positionAmt'][0] != '-' else 'BUY'
